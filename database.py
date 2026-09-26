@@ -25,3 +25,11 @@ def add_lead(name: str, phone: str, service: str, username: str):
     """, (name, phone, service, username))
     conn.commit()
     conn.close()
+
+def get_all_leads():
+    conn = sqlite3.connect("leads.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, name, phone, service, username, created_at FROM leads ORDER BY id DESC")
+    rows = cursor.fetchall()
+    conn.close()
+    return rows

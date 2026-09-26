@@ -1,16 +1,17 @@
 import os
 import re
 import asyncio
+import csv
 from dotenv import load_dotenv
 
 from aiogram import Bot, Dispatcher, F
-from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
+from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove, FSInputFile
 from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.client.session.aiohttp import AiohttpSession
 
-from database import init_db, add_lead
+from database import init_db, add_lead, get_all_leads
 
 # 1. Читаем ключи из .env
 load_dotenv()
@@ -126,6 +127,33 @@ async def process_service(message: Message, state: FSMContext):
         await bot.send_message(chat_id=int(ADMIN_ID), text=report, parse_mode="HTML")
         add_lead(name=name, phone=phone, service=service, username=username)
 
+# Команда только для админа — выгрузка лидов в CSV
+@dp.message(Command("export"))
+async def export_leads(message: Message):
+    if str(message.from_user.id) != str(ADMIN_ID):
+        return  # Игнорируем левых пользователей
+
+    leads = get_all_leads()
+    if not leads:
+        await message.answer("В базе пока нет ни одной заявки.")
+        return
+
+    file_path = "leads_export.csv"
+
+    # Формируем CSV с кодировкой utf-8-sig (чтобы Excel сразу корректно отобразил кириллицу)
+    with open(file_path, mode="w", newline="", encoding="utf-8-sig") as file:
+        writer = csv.writer(file, delimiter=";")
+        writer.writerow(["ID", "Имя", "Телефон", "Услуга/Задача", "Юзернейм", "Дата и время"])
+        for lead in leads:
+            writer.writerow(lead)
+
+    document = FSInputFile(file_path)
+    await message.answer_document(document, caption="📊 Актуальная база заявок из SQLite:")
+    
+    # Удаляем временный файл с диска после отправки
+    if os.path.exists(file_path):
+        os.remove(file_path)
+        
 async def main():
     init_db()
     print(">>> Бот успешно запущен и слушает Telegram...")
