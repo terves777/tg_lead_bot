@@ -13,19 +13,16 @@ from aiogram.client.session.aiohttp import AiohttpSession
 
 from database import init_db, add_lead, get_all_leads
 
-# 1. Читаем ключи из .env
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = os.getenv("ADMIN_ID")
 
-# 2. Подключаем SOCKS5 прокси
 PROXY_URL = "socks5://127.0.0.1:10808"
 
 session = AiohttpSession(proxy=PROXY_URL)
 bot = Bot(token=BOT_TOKEN, session=session)
 dp = Dispatcher()
 
-# Шаги диалога (FSM)
 class OrderForm(StatesGroup):
     name = State()
     phone = State()
@@ -42,7 +39,6 @@ cancel_kb = ReplyKeyboardMarkup(
     resize_keyboard=True
 )
 
-# Хэндлер отмены (работает в любом состоянии)
 @dp.message(F.text == "❌ Отмена")
 @dp.message(Command("cancel"))
 async def cancel_handler(message: Message, state: FSMContext):
@@ -83,9 +79,8 @@ async def process_name(message: Message, state: FSMContext):
 async def process_phone(message: Message, state: FSMContext):
     raw_phone = message.text.strip()
     
-    # Регулярка: проверяет формат от 10 до 15 цифр, опциональный плюс в начале
     phone_pattern = r"^\+?[0-9]{10,15}$"
-    cleaned_phone = re.sub(r"[\s\-\(\)]", "", raw_phone)  # выкидываем скобки и дефисы для проверки
+    cleaned_phone = re.sub(r"[\s\-\(\)]", "", raw_phone) 
     
     if not re.match(phone_pattern, cleaned_phone):
         await message.answer(
@@ -114,7 +109,6 @@ async def process_service(message: Message, state: FSMContext):
         reply_markup=main_kb
     )
 
-    # Пересылаем карточку заявки тебе в ЛС и пишем в БД
     if ADMIN_ID:
         username = f"@{message.from_user.username}" if message.from_user.username else "скрыт"
         report = (
@@ -127,12 +121,10 @@ async def process_service(message: Message, state: FSMContext):
         await bot.send_message(chat_id=int(ADMIN_ID), text=report, parse_mode="HTML")
         add_lead(name=name, phone=phone, service=service, username=username)
 
-# Команда только для админа — выгрузка лидов в CSV
 @dp.message(Command("export"))
 async def export_leads(message: Message):
     if str(message.from_user.id) != str(ADMIN_ID):
-        return  # Игнорируем левых пользователей
-
+        return
     leads = get_all_leads()
     if not leads:
         await message.answer("В базе пока нет ни одной заявки.")
@@ -140,7 +132,6 @@ async def export_leads(message: Message):
 
     file_path = "leads_export.csv"
 
-    # Формируем CSV с кодировкой utf-8-sig (чтобы Excel сразу корректно отобразил кириллицу)
     with open(file_path, mode="w", newline="", encoding="utf-8-sig") as file:
         writer = csv.writer(file, delimiter=";")
         writer.writerow(["ID", "Имя", "Телефон", "Услуга/Задача", "Юзернейм", "Дата и время"])
@@ -149,8 +140,7 @@ async def export_leads(message: Message):
 
     document = FSInputFile(file_path)
     await message.answer_document(document, caption="📊 Актуальная база заявок из SQLite:")
-    
-    # Удаляем временный файл с диска после отправки
+
     if os.path.exists(file_path):
         os.remove(file_path)
         
