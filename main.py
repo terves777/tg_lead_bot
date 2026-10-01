@@ -11,7 +11,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.client.session.aiohttp import AiohttpSession
 
-from database import init_db, add_lead, get_all_leads
+from database import init_db, add_lead, get_all_leads, get_leads_count
 
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -119,13 +119,13 @@ async def process_service(message: Message, state: FSMContext):
             f"🔗 <b>Профиль:</b> {username}"
         )
         await bot.send_message(chat_id=int(ADMIN_ID), text=report, parse_mode="HTML")
-        add_lead(name=name, phone=phone, service=service, username=username)
+        await add_lead(name=name, phone=phone, service=service, username=username)
 
 @dp.message(Command("export"))
 async def export_leads(message: Message):
     if str(message.from_user.id) != str(ADMIN_ID):
         return
-    leads = get_all_leads()
+    leads = await get_all_leads()
     if not leads:
         await message.answer("В базе пока нет ни одной заявки.")
         return
@@ -143,9 +143,16 @@ async def export_leads(message: Message):
 
     if os.path.exists(file_path):
         os.remove(file_path)
+        @dp.message(Command("stats"))
+        async def show_stats(message: Message):
+            if str(message.from_user.id) != str(ADMIN_ID):
+                return
+
+    count = await get_leads_count()
+    await message.answer(f"📊 <b>Статистика бота:</b>\nВсего собрано заявок: <b>{count}</b>", parse_mode="HTML")
         
 async def main():
-    init_db()
+    await init_db()
     print(">>> Бот успешно запущен и слушает Telegram...")
     await dp.start_polling(bot)
 
